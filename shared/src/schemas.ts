@@ -2,10 +2,6 @@ import { z } from "zod";
 import { COUNTRIES, FieldConfig } from "./countries";
 
 function fieldToZod(field: FieldConfig): z.ZodTypeAny {
-  if (field.type === "select" && field.options && field.options.length > 0) {
-    const schema = z.enum(field.options as [string, ...string[]]);
-    return field.required ? schema : schema.optional();
-  }
   if (field.required) {
     let schema = z.string().min(1, `${field.label} is required`);
     if (field.pattern) {

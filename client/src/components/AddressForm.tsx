@@ -32,7 +32,7 @@ function ManualForm({
   const emptyValues = Object.fromEntries(
     config.fields.map((f) => [f.name, ""]),
   );
-  const methods = useForm<Record<string, string>>({
+  const formMethods = useForm<Record<string, string>>({
     resolver: zodResolver(schema),
     defaultValues: { ...emptyValues, ...defaultValues },
   });
@@ -41,7 +41,7 @@ function ManualForm({
     handleSubmit,
     formState: { isSubmitting },
     setError,
-  } = methods;
+  } = formMethods;
 
   const mutation = useMutation({
     mutationFn: saveAddress,
@@ -64,15 +64,16 @@ function ManualForm({
   }
 
   return (
-    <FormProvider {...methods}>
+    <FormProvider {...formMethods}>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
         <DynamicFieldRenderer config={config} />
 
-        {mutation.isError && !Object.keys(methods.formState.errors).length && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            Something went wrong. Please try again.
-          </p>
-        )}
+        {mutation.isError &&
+          !Object.keys(formMethods.formState.errors).length && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              Something went wrong. Please try again.
+            </p>
+          )}
 
         <div className="flex items-center justify-between pt-2">
           <button
