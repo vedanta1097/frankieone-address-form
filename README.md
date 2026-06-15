@@ -87,3 +87,51 @@ See [design-decisions.md](design-decisions.md) for full write-up. Key choices:
 | Backend      | Express 4                              |
 | Database     | SQLite via better-sqlite3              |
 | Validation   | Zod (shared between client and server) |
+| Testing      | Vitest, Supertest, Playwright          |
+
+## Testing
+
+### Run all unit and integration tests
+
+```bash
+npm test
+```
+
+This runs tests across all three workspaces in order:
+
+| Workspace | Tool               | What is tested                                          |
+| --------- | ------------------ | ------------------------------------------------------- |
+| `shared`  | Vitest             | `buildSchema()` validation logic, country config shape  |
+| `server`  | Vitest + Supertest | Express route behaviour against an in-memory SQLite DB  |
+| `client`  | Vitest + jsdom     | `CountrySelector` and `DynamicFieldRenderer` components |
+
+### Run E2E tests (Playwright)
+
+The E2E suite requires the dev servers to be running, or Playwright will start them automatically.
+
+```bash
+# Headless (fast, no browser window — suitable for CI)
+npm run test:e2e
+
+# Interactive UI explorer (recommended for development)
+npm run test:e2e:ui
+
+# Headed — opens a browser window at normal speed
+npm run test:e2e:headed
+
+# Headed — opens a browser window with 500 ms delay between actions (easy to follow)
+npm run test:e2e:headed:slow
+```
+
+E2E tests cover:
+
+- Country switching renders the correct fields
+- Client-side and server-side validation error messages
+- Full happy-path submission and appearance in the Saved Addresses panel
+- Form resets to autocomplete mode after a successful save
+
+### Test architecture notes
+
+- The server uses `DATABASE_URL=:memory:` during tests (set in `server/vitest.config.ts`), so tests run against a fresh in-memory SQLite instance with no disk I/O and no leftover data.
+- `server/src/index.ts` exports `app` separately and only calls `app.listen()` when `NODE_ENV !== "test"`, so Supertest can import the app without starting a real server on a port.
+- The Playwright config sets `workers: 1` so headed runs use a single browser window instead of spawning multiple browsers in parallel.
