@@ -14,10 +14,7 @@ CREATE TABLE IF NOT EXISTS addresses (
 ```
 
 **Why not flat table (all columns nullable)?**
-Gets wide fast as more countries are added. Many null columns per row.
-
-**Why not EAV (Entity-Attribute-Value)?**
-Terrible for reads — requires pivoting rows into columns. Overkill and genuinely bad for this use case.
+Gets wide fast as more countries are added. Many null columns per row. Every new country or field change also requires a schema migration (`ALTER TABLE ADD COLUMN`) — meaning a code change, a migration file, and a deployment just to support a new address format.
 
 **Why JSON in TEXT column?**
 
@@ -100,7 +97,7 @@ This directly addresses the bonus requirement: _"show how you would design the A
 ```
 /
 ├── client/   (Vite + React + TypeScript)
-├── server/   (Express + Drizzle + SQLite)
+├── server/   (Express + better-sqlite3 + TypeScript)
 └── shared/   (Zod schemas + TypeScript types)
 ```
 
@@ -111,40 +108,52 @@ The spec explicitly mentions Express/Hono/Fastify. Separate frontend and backend
 Simpler setup, single `npm install` at root, and enables the `shared/` folder pattern.
 
 **Why `shared/` folder?**
-Zod schemas defined once, used in both frontend validation (React Hook Form resolver) and backend validation (Express handler). This is the strongest signal of senior-level thinking — single source of truth for validation logic.
+Zod schemas defined once, used in both frontend validation (React Hook Form resolver) and backend validation (Express handler). Single source of truth for validation logic.
 
 ---
 
-## 5. Frontend State Management
+## 5. Key-based Form Remount
 
-**Decision: React Hook Form + Zod**
+**Decision: Remount `ManualForm` via `key` prop on country change**
+
+When the country changes, `ManualForm` receives a new `key` prop (`${countryCode}-${successKey}`), forcing React to fully unmount and remount the component. This re-initialises `react-hook-form` with the new country's schema and empty default values.
+
+**Why not reset the form programmatically with `reset()`?**
+Calling `reset()` inside a `useEffect` on country change leaves a single component instance managing multiple schemas across its lifetime — stale validation errors, residual field state, and the old Zod resolver can bleed through. A remount is a clean slate: new `useForm`, new resolver, new defaults. It's simpler and more correct.
+
+---
+
+## 6. Frontend State Management
+
+**Decision: React Hook Form + Zod + TanStack Query**
 
 - React Hook Form handles form state and submission
 - Zod resolver connects country-specific schemas directly to form validation
-- No Redux/Zustand — overkill for a single form flow
+- TanStack Query manages server state — the saved addresses list is fetched, cached, and automatically invalidated after each successful save mutation
+- No Redux/Zustand — overkill for a single form flow; TanStack Query covers the only shared async state (the addresses list)
 
 ---
 
-## 6. Google Places Autocomplete
+## 7. Google Places Autocomplete
 
-**Decision: Shallow integration**
+**Decision: Proxy Google Places API through the backend**
 
-- Show autocomplete suggestions for quick address entry
-- On selection, attempt to parse and pre-fill manual fields (line1, city, postal code)
-- "Manually Edit" button always available to override
+All autocomplete and place detail requests go through `/api/places/*` on the Express server rather than calling Google directly from the browser.
 
-**Trade-off:** Full Places API parsing (structured address components) is more robust but time-consuming. Shallow integration demonstrates the UX pattern within the 2-hour timebox.
+**Why not call Google Places from the frontend directly?**
+The API key would be embedded in the client bundle — visible to anyone via DevTools. Proxying through the backend keeps the key server-side only, where it can also be rate-limited or swapped without a frontend deploy.
 
 ---
 
-## Summary Table
+## 8. Summary Table
 
-| Decision           | Choice                                             | Key Reason                                    |
-| ------------------ | -------------------------------------------------- | --------------------------------------------- |
-| DB Schema          | JSON in TEXT column, minimal fixed columns         | Flexible, no migration per country            |
-| Validation         | Zod schemas built dynamically from field configs   | Mitigates JSON column con, field-level errors |
-| Country config     | `shared/` package imported by both client & server | Single source of truth, compile-time safety   |
-| Project structure  | Vite + Express monorepo                            | Matches spec, explicit separation             |
-| Shared types       | `shared/` Zod schemas + country configs            | Reused frontend + backend                     |
-| Form management    | React Hook Form + Zod                              | Clean, no overkill                            |
-| Places integration | Shallow + manual override                          | Pragmatic within timebox                      |
+| Decision           | Choice                                             | Key Reason                                         |
+| ------------------ | -------------------------------------------------- | -------------------------------------------------- |
+| DB Schema          | JSON in TEXT column, minimal fixed columns         | Flexible, no migration per country                 |
+| Validation         | Zod schemas built dynamically from field configs   | Mitigates JSON column con, field-level errors      |
+| Country config     | `shared/` package imported by both client & server | Single source of truth, compile-time safety        |
+| Project structure  | Vite + Express monorepo                            | Matches spec, explicit separation                  |
+| Shared types       | `shared/` Zod schemas + country configs            | Reused frontend + backend                          |
+| Form remount       | `key` prop on country change                       | Clean slate — avoids stale schema/validation state |
+| Form management    | React Hook Form + Zod + TanStack Query             | Clean form state, cached server state, no overkill |
+| Places integration | Google Places proxied through backend              | API key never exposed to client                    |
