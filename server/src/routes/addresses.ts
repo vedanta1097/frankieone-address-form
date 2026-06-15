@@ -66,35 +66,57 @@ router.post("/", (req: Request, res: Response) => {
   });
 });
 
-// GET /api/addresses — list saved addresses, optional ?country=USA filter
+// GET /api/addresses — list saved addresses, optional ?country=USA&page=1&limit=20
 router.get("/", (req: Request, res: Response) => {
   const { country } = req.query;
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const offset = (page - 1) * limit;
 
-  let rows: {
+  type Row = {
     id: number;
     country_code: string;
     fields: string;
     created_at: string;
-  }[];
+  };
+
+  const conditions: string[] = [];
+  const filterParams: (string | number)[] = [];
 
   if (country && typeof country === "string") {
-    rows = db
-      .prepare(
-        "SELECT * FROM addresses WHERE country_code = ? ORDER BY id DESC",
-      )
-      .all(country) as typeof rows;
-  } else {
-    rows = db
-      .prepare("SELECT * FROM addresses ORDER BY id DESC")
-      .all() as typeof rows;
+    conditions.push("country_code = ?");
+    filterParams.push(country);
   }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const rows = db
+    .prepare(
+      `SELECT * FROM addresses ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+    )
+    .all(...filterParams, limit, offset) as Row[];
+
+  const total = (
+    db
+      .prepare(`SELECT COUNT(*) as count FROM addresses ${where}`)
+      .get(...filterParams) as { count: number }
+  ).count;
 
   const parsed = rows.map((row) => ({
     ...row,
     fields: JSON.parse(row.fields) as Record<string, string>,
   }));
 
-  res.json({ success: true, data: parsed });
+  res.json({
+    success: true,
+    data: parsed,
+    pagination: {
+      page,
+      limit,
+      total,
+      hasNextPage: offset + rows.length < total,
+    },
+  });
 });
 
 // GET /api/addresses/:id — single address by id

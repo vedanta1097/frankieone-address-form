@@ -14,13 +14,44 @@ async function request<T>(path: string): Promise<ApiResponse<T>> {
 }
 
 // Addresses
-export async function fetchAddresses(
-  country?: string,
-): Promise<AddressRecord[]> {
-  const qs = country ? `?country=${country}` : "";
-  const res = await request<AddressRecord[]>(`/addresses${qs}`);
-  if (!res.success) throw new Error("Failed to load addresses");
-  return res.data ?? [];
+export interface PaginatedAddressResponse {
+  data: AddressRecord[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasNextPage: boolean;
+  };
+}
+
+export async function fetchAddresses({
+  page = 1,
+  limit = 10,
+  country,
+}: {
+  page?: number;
+  limit?: number;
+  country?: string;
+} = {}): Promise<PaginatedAddressResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (country) params.set("country", country);
+  const res = await fetch(`${BASE}/addresses?${params}`);
+  const json = (await res.json()) as ApiResponse<AddressRecord[]> & {
+    pagination?: PaginatedAddressResponse["pagination"];
+  };
+  if (!json.success) throw new Error("Failed to load addresses");
+  return {
+    data: json.data ?? [],
+    pagination: json.pagination ?? {
+      page,
+      limit,
+      total: 0,
+      hasNextPage: false,
+    },
+  };
 }
 
 export async function saveAddress(

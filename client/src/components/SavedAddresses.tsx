@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { COUNTRIES } from "shared";
 import { fetchAddresses } from "../api";
 import type { AddressRecord } from "shared";
@@ -32,13 +32,25 @@ function AddressCard({ address }: { address: AddressRecord }) {
 
 export default function SavedAddresses() {
   const {
-    data: addresses = [],
+    data,
     isLoading,
     isError,
-  } = useQuery<AddressRecord[]>({
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["addresses"],
-    queryFn: () => fetchAddresses(),
+    queryFn: ({ pageParam = 1 }) =>
+      fetchAddresses({ page: pageParam as number }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination.hasNextPage
+        ? lastPage.pagination.page + 1
+        : undefined,
   });
+
+  const addresses = data?.pages.flatMap((p) => p.data) ?? [];
+  const total = data?.pages[0]?.pagination.total ?? 0;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
@@ -46,9 +58,9 @@ export default function SavedAddresses() {
         <h2 className="text-base font-semibold text-gray-900">
           Saved Addresses
         </h2>
-        {addresses.length > 0 && (
+        {total > 0 && (
           <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-            {addresses.length}
+            {total}
           </span>
         )}
       </div>
@@ -116,6 +128,16 @@ export default function SavedAddresses() {
             <AddressCard key={addr.id} address={addr} />
           ))}
         </div>
+      )}
+
+      {hasNextPage && (
+        <button
+          onClick={() => void fetchNextPage()}
+          disabled={isFetchingNextPage}
+          className="w-full text-sm text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg py-2 transition disabled:opacity-50"
+        >
+          {isFetchingNextPage ? "Loading…" : "Load More"}
+        </button>
       )}
     </div>
   );
