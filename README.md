@@ -2,6 +2,8 @@
 
 A full-stack customer onboarding form that dynamically adapts address fields based on the selected country. Supports USA, Australia, and Indonesia.
 
+**Live demo:** https://frankieone-address-form-client.vercel.app/
+
 ## Setup
 
 ### Prerequisites
