@@ -7,7 +7,9 @@ import placesRouter from "./routes/places";
 export const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(cors({
+  origin: process.env.CORS_ORIGIN?.split(",") ?? "http://localhost:5173",
+}));
 app.use(express.json());
 
 app.use("/api/addresses", addressesRouter);
